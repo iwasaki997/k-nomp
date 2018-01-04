@@ -7,6 +7,8 @@ var async = require('async');
 var Stratum = require('stratum-pool');
 var util = require('stratum-pool/lib/util.js');
 
+var errorCount = 0;
+
 module.exports = function(logger){
 
     var poolConfigs = JSON.parse(process.env.pools);
@@ -250,9 +252,22 @@ function SetupForPool(logger, poolOptions, setupFinished){
 
         // do not allow more than a single z_sendmany operation at a time
         if (opidCount > 0) {
-            logger.warning(logSystem, logComponent, 'sendTToZ is waiting, too many z_sendmany operations already in progress.');
+            errorCount++;
+            logger.warning(logSystem, logComponent, 'sendTToZ is waiting, too many z_sendmany operations already in progress. '+opidCount+' '+errorCount);
+
+
+            if (errorCount > 5){
+
+                 fs.writeFile('errorPayment.txt', 'Error count.' + errorCount, function(err){
+                            logger.error('Could not write errorPayment.txt');
+                 });
+
+                 logger.warning(logSystem, logComponent, 'Error count.');
+            }
+
             return;
         }
+        errorCount = 0;
 
         var amount = satoshisToCoins(tBalance - 10000);
         var params = [poolOptions.address, [{'address': poolOptions.zAddress, 'amount': amount}]];
@@ -289,14 +304,26 @@ function SetupForPool(logger, poolOptions, setupFinished){
 
         // do not allow more than a single z_sendmany operation at a time
         if (opidCount > 0) {
-            logger.warning(logSystem, logComponent, 'sendZToT is waiting, too many z_sendmany operations already in progress.');
+            errorCount++;
+            logger.warning(logSystem, logComponent, 'sendZToT is waiting, too many z_sendmany operations already in progress. '+opidCount+' '+errorCount);
+
+            if (errorCount > 5){
+
+                 fs.writeFile('errorPayment.txt', 'Error count.' + errorCount, function(err){
+                            logger.error('Could not write errorPayment.txt');
+                 });
+
+                 logger.warning(logSystem, logComponent, 'Error count.');
+            }
+
             return;
         }
+        errorCount = 0;
 
         var amount = satoshisToCoins(zBalance - 10000);
         // unshield no more than 100 ZEC at a time
-        if (amount > 100.0)
-            amount = 100.0;
+        if (amount > 200.0)
+            amount = 200.0;
 
         var params = [poolOptions.zAddress, [{'address': poolOptions.tAddress, 'amount': amount}]];
         daemon.cmd('z_sendmany', params,
