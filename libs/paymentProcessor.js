@@ -96,6 +96,7 @@ function SetupForPool(logger, poolOptions, setupFinished){
     var coinPrecision;
 
     var paymentInterval;
+    var disablePeymentProcessing = false;
 
     function validateAddress (callback){
         daemon.cmd('validateaddress', [poolOptions.address], function(result) {
@@ -173,9 +174,11 @@ function SetupForPool(logger, poolOptions, setupFinished){
             return;
         }
         if (paymentInterval) {
-            clearInterval(paymentInterval);
+            //clearInterval(paymentInterval);
+            clearTimeout(paymentInterval);
         }
-        paymentInterval = setInterval(processPayments, paymentIntervalSecs * 1000);
+        //paymentInterval = setInterval(processPayments, paymentIntervalSecs * 1000);
+        paymentInterval = setTimeout(processPayments, paymentIntervalSecs * 1000);
         //setTimeout(processPayments, 100);
         setupFinished(true);
     }
@@ -306,7 +309,7 @@ function SetupForPool(logger, poolOptions, setupFinished){
         if (opidCount > 0) {
             errorCount++;
             logger.warning(logSystem, logComponent, 'sendZToT is waiting, too many z_sendmany operations already in progress. '+opidCount+' '+errorCount);
-
+            
             if (errorCount > 5){
 
                  fs.writeFile('errorPayment.txt', 'Error count.' + errorCount, function(err){
@@ -321,7 +324,7 @@ function SetupForPool(logger, poolOptions, setupFinished){
         errorCount = 0;
 
         var amount = satoshisToCoins(zBalance - 10000);
-        // unshield no more than 100 ZEC at a time
+        // unshield no more than 100 KOTO at a time
         if (amount > 200.0)
             amount = 200.0;
 
@@ -1266,7 +1269,9 @@ function SetupForPool(logger, poolOptions, setupFinished){
 
                             } else {
 
-                                clearInterval(paymentInterval);
+                                //clearInterval(paymentInterval);
+                                clearTimeout(paymentInterval);
+                                disablePeymentProcessing = true;
 
                                 logger.error(logSystem, logComponent, 'Error RPC sendmany did not return txid '
                                     + JSON.stringify(result) + 'Disabling payment processing to prevent possible double-payouts.');
@@ -1401,8 +1406,10 @@ function SetupForPool(logger, poolOptions, setupFinished){
                 redisClient.multi(finalRedisCommands).exec(function(error, results){
                     endRedisTimer();
                     if (error) {                        
-                        clearInterval(paymentInterval);
-                        
+                        //clearInterval(paymentInterval);
+                        clearTimeout(paymentInterval);
+                        disablePeymentProcessing = true;
+ 
                         logger.error(logSystem, logComponent,
                                 'Payments sent but could not update redis. ' + JSON.stringify(error)
                                 + ' Disabling payment processing to prevent possible double-payouts. The redis commands in '
@@ -1417,6 +1424,10 @@ function SetupForPool(logger, poolOptions, setupFinished){
             }
 
         ], function(){
+            if (!disablePeymentProcessing) {
+                paymentInterval = setTimeout(processPayments, paymentIntervalSecs * 1000);
+            }
+
 
             var paymentProcessTime = Date.now() - startPaymentProcess;
             logger.debug(logSystem, logComponent, 'Finished interval - time spent: '
